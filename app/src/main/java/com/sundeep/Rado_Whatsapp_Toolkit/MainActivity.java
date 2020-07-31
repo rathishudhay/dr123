@@ -152,6 +152,7 @@ System.out.println("Env:"+Environment.getExternalStorageDirectory());
             case 400:
                 if(resultCode==RESULT_OK){
                     handleSignInIntent(data);
+                    System.out.println("Inside activityResult");
                 }
                 break;
         }
@@ -172,9 +173,9 @@ System.out.println("Env:"+Environment.getExternalStorageDirectory());
                                 credential)
                                 .setApplicationName("My Drive Tutorial")
                                 .build();
-
+                        System.out.println("Drive handle"+googleDriveService);
                         driveServiceHelper=new DriveServiceHelper(googleDriveService,getApplicationContext());
-
+                        System.out.println("Called:"+driveServiceHelper);
                         //driveServiceHelper.backupFiles(broadcastId);
                         startService();
                     }

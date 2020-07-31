@@ -9,12 +9,14 @@ import android.app.ProgressDialog;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
+import android.util.Log;
 import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnFailureListener;
@@ -27,7 +29,7 @@ import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
 
-import org.apache.http.HttpResponse;
+//import org.apache.http.HttpResponse;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -59,6 +61,10 @@ public class DriveServiceHelper{
         this.mDriveService=mDriveService;
         this.context=context;
     }
+
+//    public DriveServiceHelper(){
+//
+//    }
 
     public Task<String> uploadFile(String parentId,String filePath){
         return Tasks.call(mExecutor,()->{
@@ -349,35 +355,37 @@ public class DriveServiceHelper{
         this.broadcastId=broadcastId;
         try {
             broadcastRootFolderId=Broadcaster_JSON.getBroadCastRootInDrive();
-
+//            task.execute(broadcastRootFolderId);
+            checkIfFolderExists(broadcastRootFolderId);
             System.out.println("outside root if");
             if(broadcastRootFolderId.equals("null")){
-                System.out.println("inside root if");
                 createRootFolderInDrive();
             }else{
                 //Check broadcaster exists
-                System.out.println("bid:"+broadcastId);
-                String broadCastDriveFolderId=Broadcaster_JSON.getBroadCastDriveFolderId(broadcastId);
-                System.out.println(broadCastDriveFolderId);
-                currentBroadcastFolderId=broadCastDriveFolderId;
-                if(broadCastDriveFolderId==null){
-                    System.out.println("inside"+broadCastDriveFolderId);
-                    createBroadcastFolderInDrive(broadcastRootFolderId,broadcastId);
-                }else{
-                    try {
-//                        Broadcaster_JSON.writeBroadcasterFolderId(broadcastId,folderId);
-                        JSONObject filePathsJSON=Broadcaster_JSON.getBackupFiles(broadcastId);
-                        uploadFilePaths=filePathsJSON.getJSONArray("backupPaths");
-                        removeFilePaths=filePathsJSON.getJSONArray("removePaths");
-                        totalFilesToUpload=uploadFilePaths.length();
-                        mDriveData.sendUploadedDetails(totalFilesToUpload-uploadFilePaths.length(),totalFilesToUpload);
-                        performFileUpload();
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+
+                driveFolderExistsTask(broadcastRootFolderId).addOnSuccessListener(new OnSuccessListener<Boolean>() {
+                    @Override
+                    public void onSuccess(Boolean folderIdExists) {
+                        if(folderIdExists){
+                            checkBroadcasterFolderIdAndUpload();
+                        }else{
+                            createRootFolderInDrive();
+                        }
+                        System.out.println("FolderIdExists:"+folderIdExists);
                     }
-                }
+                }).addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        e.printStackTrace();
+
+                        Toast.makeText(context,"Cannot connect to drive",Toast.LENGTH_LONG).show();
+                    }
+                });
+
+
+
+//                checkBroadcasterFolderIdAndUpload();
+                System.out.println("bid:"+broadcastId);
             }
         } catch (JSONException e) {
             e.printStackTrace();
@@ -425,8 +433,8 @@ public class DriveServiceHelper{
         progressDialog.setTitle("Uploading to google drive");
         progressDialog.setMessage("Please wait");
 //        progressDialog.show();
-
-        uploadFolder(parentFolderId,broadcastId).addOnSuccessListener(new OnSuccessListener<String>() {
+        String broadcastName=Broadcaster_JSON.getBroadcastName(broadcastId);
+        uploadFolder(parentFolderId,broadcastName).addOnSuccessListener(new OnSuccessListener<String>() {
             @Override
             public void onSuccess(String folderId) {
 //                progressDialog.dismiss();
@@ -436,14 +444,7 @@ public class DriveServiceHelper{
                 currentBroadcastFolderId=folderId;
                 try {
                     Broadcaster_JSON.writeBroadcasterFolderId(broadcastId,folderId);
-                    JSONObject filePathsJSON=Broadcaster_JSON.getBackupFiles(broadcastId);
-                    uploadFilePaths=filePathsJSON.getJSONArray("backupPaths");
-
-                    removeFilePaths=filePathsJSON.getJSONArray("removePaths");
-                    totalFilesToUpload=uploadFilePaths.length();
-                    mDriveData.sendUploadedDetails(totalFilesToUpload-uploadFilePaths.length(),totalFilesToUpload);
-                    System.out.println("TotalFiles:"+totalFilesToUpload);
-                    performFileUpload();
+                    prepareDataForFileUpload();
                 } catch (JSONException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
@@ -552,6 +553,143 @@ public class DriveServiceHelper{
 
     public void setDriveDataInterface(DriveData driveData){
         this.mDriveData=driveData;
+    }
+
+
+    public boolean validFileId(String id) {
+        try {
+            File f = mDriveService.files().get(id).execute();
+
+//            f.
+            return !f.getTrashed();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("bad id: " + id);
+        }
+        return false;
+    }
+
+    void prepareDataForFileUpload(){
+        JSONObject filePathsJSON= null;
+        try {
+            filePathsJSON = Broadcaster_JSON.getBackupFiles(broadcastId);
+            uploadFilePaths=filePathsJSON.getJSONArray("backupPaths");
+            removeFilePaths=filePathsJSON.getJSONArray("removePaths");
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        totalFilesToUpload=uploadFilePaths.length();
+        mDriveData.sendUploadedDetails(totalFilesToUpload-uploadFilePaths.length(),totalFilesToUpload);
+        performFileUpload();
+    }
+
+
+
+    AsyncTask<String, Integer, Void> task = new AsyncTask<String, Integer, Void>() {
+        @Override
+        protected Void doInBackground(String... params) {
+            try {
+                String id=params[0];
+                File f = mDriveService.files().get(id)
+                        .setFields("trashed")
+                        .execute();
+                System.out.println(f.get("trashed"));
+                System.out.println("Trashed::"+ f);
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("bad id: ");
+            }
+
+//            return false;
+            System.out.println("Trashed:"+ false);
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void token) {
+//            Log.i("TAG", "Access token retrieved:" + token);
+        }
+
+    };
+
+
+
+    Task<Boolean> driveFolderExistsTask(String folderId) {
+        return Tasks.call(mExecutor, () -> {
+
+            Boolean trashed;
+            try{
+                File f = mDriveService.files().get(folderId)
+                        .setFields("trashed")
+                        .execute();
+                System.out.println(f.get("trashed"));
+                trashed=(Boolean) f.get("trashed");
+            }catch(IOException e){
+                System.out.println(e);
+                trashed=true;
+            }
+            return !trashed;
+        });
+    }
+
+    void checkIfFolderExists(String folderId){
+        driveFolderExistsTask(folderId).addOnSuccessListener(new OnSuccessListener<Boolean>() {
+            @Override
+            public void onSuccess(Boolean folderIdExists) {
+//                progressDialog.dismiss();
+//                return folderIdExists;
+                System.out.println("FolderIdExists:"+folderIdExists);
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                e.printStackTrace();
+
+                Toast.makeText(context,"Cannot connect to drive",Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+
+    void checkBroadcasterFolderIdAndUpload(){
+        String broadCastDriveFolderId= null;
+        try {
+            broadCastDriveFolderId = Broadcaster_JSON.getBroadCastDriveFolderId(broadcastId);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        System.out.println(broadCastDriveFolderId);
+        currentBroadcastFolderId=broadCastDriveFolderId;
+        if(broadCastDriveFolderId==null){
+            System.out.println("inside"+broadCastDriveFolderId);
+            createBroadcastFolderInDrive(broadcastRootFolderId,broadcastId);
+        }else{
+
+            driveFolderExistsTask(currentBroadcastFolderId).addOnSuccessListener(new OnSuccessListener<Boolean>() {
+                @Override
+                public void onSuccess(Boolean folderIdExists) {
+
+                    if(folderIdExists){
+                        prepareDataForFileUpload();
+                    }else{
+                        createBroadcastFolderInDrive(broadcastRootFolderId,broadcastId);
+                    }
+
+                }
+            }).addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    e.printStackTrace();
+
+                    Toast.makeText(context,"Cannot connect to drive",Toast.LENGTH_LONG).show();
+                }
+            });
+
+
+        }
     }
 
 }

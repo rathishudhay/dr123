@@ -831,6 +831,26 @@ public class Broadcaster_JSON {
         }catch(IOException e){
             e.printStackTrace();
         }
+    }
 
+
+    public static String getBroadcastName(String broadcastId) {
+        JSONObject Whole_obj = null;
+        try {
+            Whole_obj = new JSONObject(loadPinnedJSONFromAsset());
+            JSONArray broadcastsArray = Whole_obj.getJSONArray("broadcasts");
+            for (int i = 0; i < broadcastsArray.length(); i++) {
+                JSONObject broadcastObject = (JSONObject) broadcastsArray.get(i);
+                System.out.println("id:" + broadcastObject.get("id"));
+                if (broadcastObject.get("id").equals(broadcastId)) {
+                    String broadcastName = broadcastObject.getString("name");
+                    return broadcastName;
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return null;
     }
 }

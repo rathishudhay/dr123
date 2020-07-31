@@ -34,7 +34,7 @@ public class DriveUploadService extends Service implements DriveServiceHelper.Dr
     }
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
+        createNotificationChannel();
         if (ACTION_STOP_SERVICE.equals(intent.getAction())) {
             Log.d("Statics.LOG_TAG","called to cancel service");
             stopSelf();
@@ -47,7 +47,7 @@ public class DriveUploadService extends Service implements DriveServiceHelper.Dr
         driveServiceHelper.setDriveDataInterface(this);
         driveServiceHelper.backupFiles(broadcastId);
 
-        createNotificationChannel();
+
 //        startForegroundNotification("Uploading 1/5");
 //        Notification notification1 = new NotificationCompat.Builder(this, CHANNEL_ID)
 //                .setContentTitle("Foreground Service")

@@ -47,8 +47,9 @@ android {
     }
 
     configurations {
-        all { // You should exclude one of them not both of them
-            exclude group: "com.android.support", module: "support-v4"
+        all {
+            exclude module: 'httpclient'
+            exclude module: 'commons-logging'
         }
     }
 

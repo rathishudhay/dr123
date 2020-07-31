@@ -208,8 +208,6 @@ public class FloatingViewService extends Service {
         StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
         StrictMode.setVmPolicy(builder.build());
 
-        String number="1593440781";
-        String message="Hello";
         String textBody="Hello";
 
         PackageManager pm=getPackageManager();
@@ -238,8 +236,4 @@ public class FloatingViewService extends Service {
             //error message
         }
     }
-
-
-
-
 }
